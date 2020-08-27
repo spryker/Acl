@@ -59,4 +59,15 @@
         <property name="navigationItems" type="NavigationItem[]" associative="true" singular="navigationItem"/>
     </transfer>
 
+    <transfer name="AclEntityAccessRulesSet">
+        <property associative="true" name="entityAccessRules" type="AclEntityAccessRule[]" singular="AclEntityAccessRule" />
+    </transfer>
+
+    <transfer name="AclEntityAccessRule">
+        <property name="scope" type="string" />
+        <property name="accessibleProperties" type="string[]" />
+        <property name="operation" type="string" />
+        <property name="entity" type="string"/>
+    </transfer>
+
 </transfers>

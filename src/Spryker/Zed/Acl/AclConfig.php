@@ -7,6 +7,12 @@
 
 namespace Spryker\Zed\Acl;
 
+
+use Orm\Zed\Customer\Persistence\Map\SpyCustomerAddressTableMap;
+use Orm\Zed\Customer\Persistence\Map\SpyCustomerTableMap;
+use Orm\Zed\Merchant\Persistence\Map\SpyMerchantTableMap;
+use Orm\Zed\MerchantSalesOrder\Persistence\Map\SpyMerchantSalesOrderTableMap;
+use Orm\Zed\MerchantSalesOrder\Persistence\SpyMerchantSalesOrder;
 use Spryker\Shared\Acl\AclConstants;
 use Spryker\Shared\Config\Config;
 use Spryker\Zed\Kernel\AbstractBundleConfig;
@@ -146,5 +152,26 @@ class AclConfig extends AbstractBundleConfig
         }
 
         return [];
+    }
+
+    public function getProtectedEntities(): array
+    {
+        return [
+            [
+                'name' => (new SpyMerchantTableMap())->getPhpName(),
+            ],
+            [
+                'name' => (new SpyMerchantSalesOrderTableMap())->getPhpName(),
+                'parents' => [
+                    [
+                        'name' => (new SpyMerchantTableMap())->getPhpName(),
+                        'connection' => [
+                            'referenced_column' => SpyMerchantTableMap::COL_MERCHANT_REFERENCE,
+                            'reference' => SpyMerchantSalesOrderTableMap::COL_MERCHANT_REFERENCE
+                        ]
+                    ]
+                ]
+            ]
+        ];
     }
 }

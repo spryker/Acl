@@ -7,13 +7,24 @@
 
 namespace Spryker\Zed\Acl\Business;
 
+use Generated\Shared\Transfer\AclEntityAccessRulesSetTransfer;
+use Generated\Shared\Transfer\AclEntityAccessRuleTransfer;
 use Generated\Shared\Transfer\GroupCriteriaTransfer;
 use Generated\Shared\Transfer\GroupTransfer;
 use Generated\Shared\Transfer\NavigationItemCollectionTransfer;
+use Generated\Shared\Transfer\PropelQueryBuilderRuleSetTransfer;
 use Generated\Shared\Transfer\RolesTransfer;
 use Generated\Shared\Transfer\RoleTransfer;
 use Generated\Shared\Transfer\RuleTransfer;
+use Generated\Shared\Transfer\SpyAclEnetityRuleEntityTransfer;
 use Generated\Shared\Transfer\UserTransfer;
+use Orm\Zed\Acl\Persistence\SpyAclEnetityRuleQuery;
+use Orm\Zed\Acl\Persistence\SpyAclEntityRule;
+use Orm\Zed\Acl\Persistence\SpyAclEntityRuleQuery;
+use Orm\Zed\Acl\Persistence\SpyAclGroupQuery;
+use Orm\Zed\Acl\Persistence\SpyAclUserHasGroup;
+use Orm\Zed\Acl\Persistence\SpyAclUserHasGroupQuery;
+use Spryker\Zed\Kernel\BundleConfigResolverAwareTrait;
 use Spryker\Zed\Kernel\Business\AbstractFacade;
 
 /**
@@ -22,6 +33,7 @@ use Spryker\Zed\Kernel\Business\AbstractFacade;
  */
 class AclFacade extends AbstractFacade implements AclFacadeInterface
 {
+    use BundleConfigResolverAwareTrait;
     /**
      * {@inheritDoc}
      *
@@ -592,5 +604,76 @@ class AclFacade extends AbstractFacade implements AclFacadeInterface
         return $this->getFactory()
             ->createRuleModel()
             ->isIgnorable($bundle, $controller, $action);
+    }
+
+
+    public function isProtectedEntity(string $entityName)
+    {
+        foreach ($this->getConfig()->getProtectedEntities() as $protectedEntity) {
+            if ($protectedEntity['name'] === $entityName) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public function hasEntityAccess($idUser, string $entityName, string $operation = null)
+    {
+        $groups = SpyAclUserHasGroupQuery::create()
+            ->filterByFkUser_In([$idUser])
+            ->joinWithSpyAclGroup()
+            ->find()
+            ->getColumnValues('fkAclGroup');
+
+        $query = SpyAclEntityRuleQuery::create()
+            ->filterByFkAclGroup_In($groups)
+            ->filterByEntity($entityName);
+
+        if ($operation) {
+            $query->filterByOperation($operation);
+        }
+
+        return $query->exists();
+    }
+
+    /**
+     * @param $idUser
+     * @param string $entityName
+     * @return \Generated\Shared\Transfer\AclEntityAccessRulesSetTransfer
+     * @throws \Propel\Runtime\Exception\PropelException
+     * @throws \Spryker\Zed\Propel\Business\Exception\AmbiguousComparisonException
+     */
+    public function getEntityAccessRule($idUser, string $entityName, string $operation): SpyAclEntityRule
+    {
+        $groups = SpyAclUserHasGroupQuery::create()
+            ->filterByFkUser_In([$idUser])
+            ->joinWithSpyAclGroup()
+            ->find()
+            ->getColumnValues('fkAclGroup');
+
+        return SpyAclEntityRuleQuery::create()
+            ->filterByFkAclGroup_In($groups)
+            ->filterByEntity($entityName)
+            ->filterByOperation($operation)
+            ->findOne();
+    }
+
+    /**
+     * @param $idUser
+     * @param string $entityName
+     * @return string[]
+     * @throws \Propel\Runtime\Exception\PropelException
+     * @throws \Spryker\Zed\Propel\Business\Exception\AmbiguousComparisonException
+     */
+    public function findEntityParents(string $entityName): array
+    {
+        foreach ($this->getConfig()->getProtectedEntities() as $protectedEntity) {
+            if ($protectedEntity['name'] === $entityName) {
+                return $protectedEntity['parents'] ?? [];
+            }
+        }
+
+        return [];
     }
 }
