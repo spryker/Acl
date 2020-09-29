@@ -620,11 +620,7 @@ class AclFacade extends AbstractFacade implements AclFacadeInterface
 
     public function hasEntityAccess($idUser, string $entityName, string $operation = null)
     {
-        $groups = SpyAclUserHasGroupQuery::create()
-            ->filterByFkUser_In([$idUser])
-            ->joinWithSpyAclGroup()
-            ->find()
-            ->getColumnValues('fkAclGroup');
+        $groups = $this->getCurrentUserGroups($idUser);
 
         $query = SpyAclEntityRuleQuery::create()
             ->filterByFkAclGroup_In($groups)
@@ -646,11 +642,7 @@ class AclFacade extends AbstractFacade implements AclFacadeInterface
      */
     public function getEntityAccessRule($idUser, string $entityName, string $operation): SpyAclEntityRule
     {
-        $groups = SpyAclUserHasGroupQuery::create()
-            ->filterByFkUser_In([$idUser])
-            ->joinWithSpyAclGroup()
-            ->find()
-            ->getColumnValues('fkAclGroup');
+        $groups = $this->getCurrentUserGroups($idUser);
 
         return SpyAclEntityRuleQuery::create()
             ->filterByFkAclGroup_In($groups)
@@ -676,4 +668,26 @@ class AclFacade extends AbstractFacade implements AclFacadeInterface
 
         return [];
     }
+
+    /**
+     * @param $idUser
+     * @return array
+     */
+    private function getCurrentUserGroups($idUser): array
+    {
+        $videoKingGroup = 3;
+        $sprykerGroup = 4;
+        $catalogViewerGroup = 5;
+        $catalogManagerGroup = 6;
+
+        return [$videoKingGroup, $catalogManagerGroup];
+//        $groups = SpyAclUserHasGroupQuery::create()
+//            ->filterByFkUser_In([$idUser])
+//            ->joinWithSpyAclGroup()
+//            ->find()
+//            ->getColumnValues('fkAclGroup');
+//        return $groups;
+    }
+
+
 }
