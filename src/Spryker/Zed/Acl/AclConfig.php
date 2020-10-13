@@ -14,6 +14,11 @@ use Orm\Zed\Merchant\Persistence\Map\SpyMerchantTableMap;
 use Orm\Zed\MerchantProduct\Persistence\Map\SpyMerchantProductAbstractTableMap;
 use Orm\Zed\MerchantSalesOrder\Persistence\Map\SpyMerchantSalesOrderTableMap;
 use Orm\Zed\MerchantSalesOrder\Persistence\SpyMerchantSalesOrder;
+use Orm\Zed\Product\Persistence\Base\SpyProduct;
+use Orm\Zed\ProductOffer\Persistence\Map\SpyProductOfferTableMap;
+use Orm\Zed\ProductOffer\Persistence\SpyProductOffer;
+use Orm\Zed\Sales\Persistence\Map\SpySalesShipmentTableMap;
+use Orm\Zed\Sales\Persistence\SpySalesShipment;
 use Spryker\Shared\Acl\AclConstants;
 use Spryker\Shared\Config\Config;
 use Spryker\Zed\Kernel\AbstractBundleConfig;
@@ -172,7 +177,31 @@ class AclConfig extends AbstractBundleConfig
                         ]
                     ]
                 ]
-            ]
+            ],
+            [
+                'name' => SpySalesShipmentTableMap::OM_CLASS,
+                'parents' => [
+                    [
+                        'name' => SpyMerchantTableMap::OM_CLASS,
+                        'connection' => [
+                            'referenced_column' => SpyMerchantTableMap::COL_MERCHANT_REFERENCE,
+                            'reference' => SpySalesShipmentTableMap::COL_MERCHANT_REFERENCE
+                        ]
+                    ]
+                ]
+            ],
+//            [
+//                'name' => SpyProductOfferTableMap::OM_CLASS,
+//                'parents' => [
+//                    [
+//                        'name' => SpyMerchantTableMap::OM_CLASS,
+//                        'connection' => [
+//                            'referenced_column' => SpyMerchantTableMap::COL_ID_MERCHANT,
+//                            'reference' => SpyProductOfferTableMap::COL_FK_MERCHANT
+//                        ]
+//                    ]
+//                ]
+//            ]
         ];
     }
 }

@@ -25,4 +25,10 @@ interface AclConstants
     public const ROOT_GROUP = 'root_group';
     public const ROOT_ROLE = 'root_role';
     public const ALLOW = 'allow';
+
+
+    const ENTNTY_PERMISSION_MASK_READ = 0b1;
+    const ENTNTY_PERMISSION_MASK_CREATE = 0b10;
+    const ENTNTY_PERMISSION_MASK_UPDATE = 0b100;
+    const ENTNTY_PERMISSION_MASK_DELETE = 0b01000;
 }

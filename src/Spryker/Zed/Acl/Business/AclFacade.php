@@ -24,8 +24,15 @@ use Orm\Zed\Acl\Persistence\SpyAclEntityRuleQuery;
 use Orm\Zed\Acl\Persistence\SpyAclGroupQuery;
 use Orm\Zed\Acl\Persistence\SpyAclUserHasGroup;
 use Orm\Zed\Acl\Persistence\SpyAclUserHasGroupQuery;
+use Orm\Zed\Merchant\Persistence\SpyMerchantQuery;
+use Propel\Runtime\ActiveQuery\Join;
+use Propel\Runtime\ActiveQuery\ModelCriteria;
+use Propel\Runtime\ActiveQuery\QueryJoin;
+use Propel\Runtime\Map\TableMap;
+use Spryker\Shared\Acl\AclConstants;
 use Spryker\Zed\Kernel\BundleConfigResolverAwareTrait;
 use Spryker\Zed\Kernel\Business\AbstractFacade;
+use function _HumbugBox1912330f9177\Amp\Iterator\toArray;
 
 /**
  * @method \Spryker\Zed\Acl\Business\AclBusinessFactory getFactory()
@@ -34,6 +41,8 @@ use Spryker\Zed\Kernel\Business\AbstractFacade;
 class AclFacade extends AbstractFacade implements AclFacadeInterface
 {
     use BundleConfigResolverAwareTrait;
+
+    protected $aliasIndex = 0;
     /**
      * {@inheritDoc}
      *
@@ -618,19 +627,47 @@ class AclFacade extends AbstractFacade implements AclFacadeInterface
         return false;
     }
 
-    public function hasEntityAccess($idUser, string $entityName, string $operation = null)
+    public function hasEntityAccess($idUser, string $entityName, int $permission = null)
     {
-        $groups = $this->getCurrentUserGroups($idUser);
-
+        $roles = $this->getCurrentUserRolesIds($idUser);
+        xdebug_break();
         $query = SpyAclEntityRuleQuery::create()
-            ->filterByFkAclGroup_In($groups)
+            ->filterByFkAclRole_In($roles)
             ->filterByEntity($entityName);
 
-        if ($operation) {
-            $query->filterByOperation($operation);
+        foreach ($query->find() as $item) {
+            if ($permission & $item->getPermissionMask()) {
+                return true;
+            }
         }
 
-        return $query->exists();
+        return false;
+    }
+
+    /**
+     * @param $idUser
+     * @param string $entityName
+     * @return SpyAclEntityRule[]
+     * @throws \Propel\Runtime\Exception\PropelException
+     * @throws \Spryker\Zed\Propel\Business\Exception\AmbiguousComparisonException
+     */
+    public function findEntityAccessRule($idUser, string $entityName, int $permission = null):  array
+    {
+        $roles = $this->getCurrentUserRolesIds($idUser);
+
+        $rules = SpyAclEntityRuleQuery::create()
+            ->filterByFkAclRole_In($roles)
+            ->filterByEntity($entityName)
+            ->find()
+            ->getData();
+
+        if ($permission !== null) {
+            $rules = array_filter($rules, function (SpyAclEntityRule $aclEntityRule) use ($permission) {
+                return $permission & $aclEntityRule->getPermissionMask();
+            });
+        }
+
+        return $rules;
     }
 
     /**
@@ -640,15 +677,15 @@ class AclFacade extends AbstractFacade implements AclFacadeInterface
      * @throws \Propel\Runtime\Exception\PropelException
      * @throws \Spryker\Zed\Propel\Business\Exception\AmbiguousComparisonException
      */
-    public function getEntityAccessRule($idUser, string $entityName, string $operation): SpyAclEntityRule
+    public function findEntityAccessRuleForRole(int $idRole, string $entityName):  ?SpyAclEntityRule
     {
-        $groups = $this->getCurrentUserGroups($idUser);
+//        $roles = $this->getCurrentUserRolesIds($idUser);
 
         return SpyAclEntityRuleQuery::create()
-            ->filterByFkAclGroup_In($groups)
+            ->filterByFkAclRole($idRole)
             ->filterByEntity($entityName)
-            ->filterByOperation($operation)
             ->findOne();
+
     }
 
     /**
@@ -673,21 +710,197 @@ class AclFacade extends AbstractFacade implements AclFacadeInterface
      * @param $idUser
      * @return array
      */
-    private function getCurrentUserGroups($idUser): array
+    public function getCurrentUserRolesIds(): array
     {
         $videoKingGroup = 3;
         $sprykerGroup = 4;
         $catalogViewerGroup = 5;
         $catalogManagerGroup = 6;
 
-        return [$videoKingGroup, $catalogManagerGroup];
-//        $groups = SpyAclUserHasGroupQuery::create()
-//            ->filterByFkUser_In([$idUser])
-//            ->joinWithSpyAclGroup()
-//            ->find()
-//            ->getColumnValues('fkAclGroup');
-//        return $groups;
+        return [
+//            $videoKingGroup = 3,
+            $sprykerGroup = 4,
+//            $catalogViewerGroup = 5,
+//            $catalogManagerGroup = 6,
+        ];
     }
 
+    public function applyAclToQuery(ModelCriteria $query, TableMap $entityToFilterTableMap, int $roleId, int $permission)
+    {
+        $phpName = ($entityToFilterTableMap)::OM_CLASS;
+        if ($this->isProtectedEntity($phpName)) {
+            $this->addAclFilterOnEntity($query, $entityToFilterTableMap, $entityToFilterTableMap->getName(),  $roleId, $permission);
+        }
+        $this->addAclWhereForJoinedTables($query);
+
+    }
+
+
+    private function addAclFilterOnEntity(ModelCriteria $query, TableMap $entityToFilterTableMap, string $entityToFilterAlias,  int $roleId, int $permission)
+    {
+        $entityPhpName = $entityToFilterTableMap::OM_CLASS;
+        $aclRules = $this->findEntityAccessRule(1, $entityPhpName, $permission);
+        $workingRoleIds = [];
+        foreach ($aclRules as $rule) {
+            $workingRoleIds[] = $rule->getFkAclRole();
+        }
+
+        if (!$workingRoleIds) {
+            $query->where('TRUE = FALSE');
+            return;
+        }
+
+        foreach ($aclRules as $rule) {
+            if ($rule->getScope() === \Orm\Zed\Acl\Persistence\Map\SpyAclEntityRuleTableMap::COL_SCOPE_FULL) {
+                return;
+            }
+        }
+
+        $segmentRoleIds = [];
+        foreach ($aclRules as $rule) {
+            if ($rule->getScope() === \Orm\Zed\Acl\Persistence\Map\SpyAclEntityRuleTableMap::COL_SCOPE_SEGMENT) {
+                $segmentRoleIds[] = $rule->getFkAclRole();
+            }
+        }
+        if ($segmentRoleIds) {
+            $this->addJoinToSegmentTable($query, $segmentRoleIds, $entityToFilterTableMap, $entityToFilterAlias);
+        }
+
+        $inheritedRoleIds = [];
+        foreach ($aclRules as $rule) {
+            if ($rule->getScope() === \Orm\Zed\Acl\Persistence\Map\SpyAclEntityRuleTableMap::COL_SCOPE_INHERITED) {
+                $inheritedRoleIds[] = $rule->getFkAclRole();
+            }
+        }
+        if ($inheritedRoleIds) {
+            $parents = $this->findEntityParents($entityPhpName);
+
+            foreach ($parents as $parent) {
+                $parentEntityName = $parent['name'];
+                if (isset($parent['connection'])) {
+                    $this->joinAclIndirectRelation($query, $parent, $entityToFilterTableMap, $entityToFilterAlias);
+                    continue;
+                }
+            }
+        }
+    }
+    /**
+     * @param \Propel\Runtime\Map\TableMap $tableMap
+     *
+     * @return void
+     */
+    protected function addJoinToSegmentTable(ModelCriteria $query, array $segmentRoleIds,  \Propel\Runtime\Map\TableMap $leftTable, string $leftTableAlias): void
+    {
+        $entitySegment = $leftTable->getRelation($this->getAclSegmentEntityName($leftTable->getPhpName()));
+
+        $primaryKeys = $entitySegment->getLeftTable()->getPrimaryKeys();
+
+        $aliasRight = $this->generateUniqueAlias();
+        $join = new \Propel\Runtime\ActiveQuery\Join(
+            sprintf('%s.%s', $leftTableAlias, array_shift($primaryKeys)->getName()),
+            sprintf('%s.fk_%s', $entitySegment->getRightTable()->getName(), $entitySegment->getLeftTable()->getName()),
+            ModelCriteria::INNER_JOIN
+        );
+
+        $join->setRightTableAlias($aliasRight);
+        $join->setRightTableName($entitySegment->getRightTable()->getName());
+
+        $query->addJoinObject($join);
+
+        $query->where(sprintf('%s IN (%s)', $aliasRight . '.fk_spy_acl_role', implode(',', $segmentRoleIds)));
+    }
+
+
+    /**
+     * @param string $modelName
+     *
+     * @return string
+     */
+    protected function getAclSegmentEntityName(string $modelName): string
+    {
+        return sprintf('%sZedAcl', $modelName);
+    }
+
+    /**
+     * @param string $aclTablePath
+     * @param \Propel\Runtime\Map\TableMap $tableMap
+     *
+     * @return void
+     */
+    public function joinAclIndirectRelation(ModelCriteria $mainQuery, array $parentDefinition, \Propel\Runtime\Map\TableMap $tableMap, string $leftTableAlias): void
+    {
+        $mainQuery->addAlias($leftTableAlias, $mainQuery->getTableMap()->getName());
+        $reference = $tableMap::translateFieldName($parentDefinition['connection']['reference'], $tableMap::TYPE_COLNAME, $tableMap::TYPE_FIELDNAME);
+        $left = sprintf('%s.%s', $leftTableAlias, $reference);
+
+        $rightTableMapNamespace =  ($parentDefinition['name'])::TABLE_MAP;
+        /**
+         * @var $rightTableMap \Propel\Runtime\Map\TableMap
+         */
+        $rightTableMap = new $rightTableMapNamespace();
+        $rightTableMap->setDatabaseMap($mainQuery->getTableMap()->getDatabaseMap());
+        $rightTableMap->buildRelations();
+        $rightTableName = $rightTableMap->getName();
+
+        $rightTableAlias = $this->generateUniqueAlias();
+        $mainQuery->addAlias($rightTableAlias, $rightTableName);
+
+        $referenced =  $rightTableMap::translateFieldName($parentDefinition['connection']['referenced_column'], $rightTableMap::TYPE_COLNAME, $rightTableMap::TYPE_FIELDNAME);
+        $right = sprintf('%s.%s', $rightTableAlias, $referenced);
+
+        $mainQuery->addJoin($left, $right, ModelCriteria::INNER_JOIN);
+    }
+
+
+
+
+    /**
+     * @return string
+     */
+    protected function generateUniqueAlias(): string
+    {
+        $length = 64;
+        $keyspace = 'abcdefghijklmnopqrstuvwxyz';
+
+
+        if ($length < 1) {
+            throw new \RangeException("Length must be a positive integer");
+        }
+        $pieces = [];
+        $max = mb_strlen($keyspace, '8bit') - 1;
+        for ($i = 0; $i < $length; ++$i) {
+            $pieces []= $keyspace[random_int(0, $max)];
+        }
+        return implode('', $pieces);
+    }
+
+    /**
+     * @return void
+     */
+    protected function addAclWhereForJoinedTables(ModelCriteria $query): void
+    {
+        foreach ($query->getJoins() as $joinName => $join) {
+            if ($join instanceof \Propel\Runtime\ActiveQuery\QueryJoin) {
+                continue;
+            }
+            if (isset($query->handledJoins[spl_object_hash($join)])) {
+                continue;
+            }
+
+            $tableMap = $query
+                ->getTableMap()
+                ->getDatabaseMap()
+                ->getTable($join->getRightTableName());
+
+            $query->handledJoins[spl_object_hash($join)] = true;
+
+            if (!$this->isProtectedEntity($tableMap::OM_CLASS)) {
+                continue;
+            }
+
+            // permission should be dynamic
+            $this->addAclFilterOnEntity($query, $tableMap, $joinName, 1, AclConstants::ENTNTY_PERMISSION_MASK_READ);
+        }
+    }
 
 }
