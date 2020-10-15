@@ -68,6 +68,7 @@
     <table name="spy_acl_entity_rule">
         <column name="id_acl_entity_rule" required="true" type="INTEGER" autoIncrement="true" primaryKey="true"/>
         <column name="entity" required="true" size="255" type="VARCHAR"/>
+        <column name="fk_acl_entity_segment" required="false" type="INTEGER"/>
         <column name="scope" required="true" type="ENUM" valueSet="full, segment, inherited" />
         <column name="permission_mask" type="INTEGER" required="true" />
         <column name="fk_acl_role" type="INTEGER" required="true" />
@@ -75,7 +76,14 @@
         <foreign-key name="spy_acl_entity_rule-fk_acl_role" foreignTable="spy_acl_role" onDelete="CASCADE">
             <reference local="fk_acl_role" foreign="id_acl_role"/>
         </foreign-key>
+        <foreign-key name="spy_acl_entity_rule-fk_acl_entity_segment" foreignTable="spy_acl_entity_segment" onDelete="CASCADE">
+            <reference local="fk_acl_entity_segment" foreign="id_acl_entity_segment"/>
+        </foreign-key>
 
         <id-method-parameter value="spy_acl_entity_rule_pk_seq"/>
+    </table>
+    <table name="spy_acl_entity_segment">
+        <column name="id_acl_entity_segment" required="true" type="INTEGER" autoIncrement="true" primaryKey="true"/>
+        <id-method-parameter value="spy_acl_entity_segment_pk_seq"/>
     </table>
 </database>

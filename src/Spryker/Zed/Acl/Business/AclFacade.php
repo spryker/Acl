@@ -756,14 +756,14 @@ class AclFacade extends AbstractFacade implements AclFacadeInterface
             }
         }
 
-        $segmentRoleIds = [];
+        $segmentIds = [];
         foreach ($aclRules as $rule) {
             if ($rule->getScope() === \Orm\Zed\Acl\Persistence\Map\SpyAclEntityRuleTableMap::COL_SCOPE_SEGMENT) {
-                $segmentRoleIds[] = $rule->getFkAclRole();
+                $segmentIds[] = $rule->getFkAclEntitySegment();
             }
         }
-        if ($segmentRoleIds) {
-            $this->addJoinToSegmentTable($query, $segmentRoleIds, $entityToFilterTableMap, $entityToFilterAlias);
+        if ($segmentIds) {
+            $this->addJoinToSegmentTable($query, $segmentIds, $entityToFilterTableMap, $entityToFilterAlias);
         }
 
         $inheritedRoleIds = [];
@@ -789,7 +789,7 @@ class AclFacade extends AbstractFacade implements AclFacadeInterface
      *
      * @return void
      */
-    protected function addJoinToSegmentTable(ModelCriteria $query, array $segmentRoleIds,  \Propel\Runtime\Map\TableMap $leftTable, string $leftTableAlias): void
+    protected function addJoinToSegmentTable(ModelCriteria $query, array $segmentIds,  \Propel\Runtime\Map\TableMap $leftTable, string $leftTableAlias): void
     {
         $entitySegment = $leftTable->getRelation($this->getAclSegmentEntityName($leftTable->getPhpName()));
 
@@ -807,7 +807,7 @@ class AclFacade extends AbstractFacade implements AclFacadeInterface
 
         $query->addJoinObject($join);
 
-        $query->where(sprintf('%s IN (%s)', $aliasRight . '.fk_spy_acl_role', implode(',', $segmentRoleIds)));
+        $query->where(sprintf('%s IN (%s)', $aliasRight . '.fk_spy_acl_entity_segment', implode(',', $segmentIds)));
     }
 
 
@@ -850,9 +850,6 @@ class AclFacade extends AbstractFacade implements AclFacadeInterface
 
         $mainQuery->addJoin($left, $right, ModelCriteria::INNER_JOIN);
     }
-
-
-
 
     /**
      * @return string
